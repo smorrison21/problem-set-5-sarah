@@ -27,18 +27,19 @@ geometry: margin=1in
 **Due 11/9 at 5:00PM Central. Worth 100 points + 10 points extra credit.**
 
 ## Submission Steps (10 pts)
-1. This problem set is a paired problem set.
-2. Play paper, scissors, rock to determine who goes first. Call that person *Partner 1*.
-    - Sarah Morrison:
-    - Partner 2 (name and cnet ID):
-3. Partner 1 will accept the `ps5` and then share the link it creates with their partner. You can only share it with one partner so you will not be able to change it after your partner has accepted. 
-4. "This submission is our work alone and complies with the 30538 integrity policy." Add your initials to indicate your agreement: \*\*\_\_\*\* \*\*\_\_\*\*
-5. "I have uploaded the names of anyone else other than my partner and I worked with on the problem set **[here](https://docs.google.com/forms/d/185usrCREQaUbvAXpWhChkjghdGgmAZXA3lPWpXLLsts/edit)**"  (1 point)
-6. Late coins used this pset: \*\*\_\_\*\* Late coins left after submission: \*\*\_\_\*\*
-7. Knit your `ps5.qmd` to an PDF file to make `ps5.pdf`, 
-    * The PDF should not be more than 25 pages. Use `head()` and re-size figures when appropriate. 
-8. (Partner 1): push  `ps5.qmd` and `ps5.pdf` to your github repo.
-9. (Partner 1): submit `ps5.pdf` via Gradescope. Add your partner on Gradescope.
+
+1.  This problem set is a paired problem set.
+2.  Play paper, scissors, rock to determine who goes first. Call that person *Partner 1*.
+    -   Partner 1 (name and cnet ID): Sarah Morrison morrisons
+    -   Partner 2 (name and cnet ID): NA
+3.  Partner 1 will accept the `ps5` and then share the link it creates with their partner. You can only share it with one partner so you will not be able to change it after your partner has accepted.
+4.  "This submission is our work alone and complies with the 30538 integrity policy." Add your initials to indicate your agreement: \*\*SM\*\* \*\*\_\_\*\*
+5.  "I have uploaded the names of anyone else other than my partner and I worked with on the problem set [**here**](https://docs.google.com/forms/d/185usrCREQaUbvAXpWhChkjghdGgmAZXA3lPWpXLLsts/edit)" (1 point)
+6.  Late coins used this pset: \*\*\_\_\*\* Late coins left after submission: \*\*\_\_\*\*
+7.  Knit your `ps5.qmd` to an PDF file to make `ps5.pdf`,
+    -   The PDF should not be more than 25 pages. Use `head()` and re-size figures when appropriate.
+8.  (Partner 1): push `ps5.qmd` and `ps5.pdf` to your github repo.
+9.  (Partner 1): submit `ps5.pdf` via Gradescope. Add your partner on Gradescope.
 10. (Partner 1): tag your submission in Gradescope
 
 \newpage
@@ -47,42 +48,115 @@ geometry: margin=1in
 import pandas as pd
 import altair as alt
 import time
+import requests
+from bs4 import BeautifulSoup
 
 import warnings 
 warnings.filterwarnings('ignore')
 alt.renderers.enable("png")
 ```
 
-
 ## Step 1: Develop initial scraper and crawler
 
 ### 1. Scraping (PARTNER 1)
 
 ```{python}
-
+url = 'https://oig.hhs.gov/fraud/enforcement/'
+response = requests.get(url)
+soup = BeautifulSoup(response.content, 'html.parser')
 ```
 
-  
-### 2. Crawling (PARTNER 1)
+```{python}
+# ChatGPT Question: use beautiful soup to extract a ul html block
+table = soup.find('ul', class_='usa-card-group padding-y-0')
+li = table.find_all('li')
+print(li)
+```
 
 ```{python}
+#ChatGPT Question: code a dataset that has each action's header, date, category, and href link
+actions_data = []
 
+# Loop through each relevant <li> element
+for l in li:
+    header_tag = l.find("h2")
+    date_tag = l.find("span")
+    link_tag = l.find("a")
+    category_tag = l.find("ul").find("li") if l.find("ul") else None
+
+    # Skip entries where all fields are None
+    if not (header_tag or date_tag or link_tag or category_tag):
+        continue
+
+    # Append non-empty rows to the list
+    actions_data.append({
+        "Header": header_tag.get_text(strip=True) if header_tag else None,
+        "Date": date_tag.get_text(strip=True) if date_tag else None,
+        "Category": category_tag.get_text(strip=True) if category_tag else None,
+        "Link": f"https://oig.hhs.gov{link_tag['href']}" if link_tag and link_tag.has_attr('href') else None
+    })
+
+# Convert to a DataFrame
+enforcement_actions = pd.DataFrame(actions_data)
+
+# Display DataFrame to
+enforcement_actions.head()
+```
+
+### 2. Crawling (PARTNER 1)
+```{python}
+# Practice with first link to find the right information
+url_macomb = 'https://oig.hhs.gov/fraud/enforcement/macomb-county-doctor-and-pharmacist-agree-to-pay-700948-to-settle-false-claims-act-allegations/'
+response_macomb = requests.get(url_macomb)
+soup_macomb = BeautifulSoup(response_macomb.content, 'html.parser')
+table_macomb = soup_macomb.find('ul', class_='usa-list usa-list--unstyled margin-y-2')
+li_macomb = table_macomb.find_all('li')
+print(li_macomb)
+```
+
+```{python}
+# Used ChatGPT to help get rid of the Agency: part
+def get_agency(link):
+    try:
+        response = requests.get(link)
+        page_soup = BeautifulSoup(response.content, "html.parser")
+        second_li = page_soup.find("ul", class_='usa-list usa-list--unstyled margin-y-2').find_all('li')[1]
+        # Extract text after 'Agency:'
+        agency_text = second_li.get_text(strip=True)
+        # Remove 'Agency:' part if it exists
+        if agency_text.startswith('Agency:'):
+            agency_text = agency_text[len('Agency:'):].strip()
+        return agency_text
+    except Exception as e:
+        print(f"Error fetching {link}: {e}")
+        return None
+
+# Apply the function to each Link in the DataFrame
+enforcement_actions['Agency'] = enforcement_actions['Link'].apply(get_agency)
+
+# Display the updated DataFrame
+enforcement_actions.head()
 ```
 
 ## Step 2: Making the scraper dynamic
 
-### 1. Turning the scraper into a function 
+### 1. Turning the scraper into a function
 
-* a. Pseudo-Code (PARTNER 2)
+-   
 
+    a.  Pseudo-Code (PARTNER 2)
 
-* b. Create Dynamic Scraper (PARTNER 2)
+-   
+
+    b.  Create Dynamic Scraper (PARTNER 2)
 
 ```{python}
 
 ```
 
-* c. Test Partner's Code (PARTNER 1)
+-   
+
+    c.  Test Partner's Code (PARTNER 1)
 
 ```{python}
 
@@ -98,13 +172,13 @@ alt.renderers.enable("png")
 
 ### 2. Plot the number of enforcement actions categorized: (PARTNER 1)
 
-* based on "Criminal and Civil Actions" vs. "State Enforcement Agencies"
+-   based on "Criminal and Civil Actions" vs. "State Enforcement Agencies"
 
 ```{python}
 
 ```
 
-* based on five topics
+-   based on five topics
 
 ```{python}
 
@@ -118,7 +192,6 @@ alt.renderers.enable("png")
 
 ```
 
-
 ### 2. Map by District (PARTNER 2)
 
 ```{python}
@@ -128,16 +201,19 @@ alt.renderers.enable("png")
 ## Extra Credit
 
 ### 1. Merge zip code shapefile with population
+
 ```{python}
 
 ```
 
 ### 2. Conduct spatial join
+
 ```{python}
 
 ```
 
 ### 3. Map the action ratio in each district
+
 ```{python}
 
 ```
