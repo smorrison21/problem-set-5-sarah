@@ -50,10 +50,14 @@ import altair as alt
 import time
 import requests
 from bs4 import BeautifulSoup
+from datetime import datetime
+import numpy as np
 
 import warnings 
 warnings.filterwarnings('ignore')
 alt.renderers.enable("png")
+
+import datetime
 ```
 
 ## Step 1: Develop initial scraper and crawler
@@ -63,7 +67,51 @@ alt.renderers.enable("png")
 ```{python}
 url = 'https://oig.hhs.gov/fraud/enforcement/'
 response = requests.get(url)
-soup = BeautifulSoup(response.content, 'html.parser')
+soup = BeautifulSoup(response.content, 'lxml')
+```
+
+```{python}
+# ChatGPT Question: use beautiful soup to extract a ul html block
+table = soup.find('ul', class_='usa-card-group padding-y-0')
+li = table.find_all('li')
+print(li)
+```
+
+```{python}
+#ChatGPT Question: code a dataset that has each action's header, date, category, and href link
+actions_data = []
+
+# Loop through each relevant <li> element
+for l in li:
+    header_tag = l.find("h2")
+    date_tag = l.find("span")
+    link_tag = l.find("a")
+    category_tag = l.find("ul").find("li") if l.find("ul") else None
+
+    # Skip entries where all fields are None
+    if not (header_tag or date_tag or link_tag or category_tag):
+        continue
+
+    # Append non-empty rows to the list
+    actions_data.append({
+        "Header": header_tag.get_text(strip=True) if header_tag else None,
+        "Date": date_tag.get_text(strip=True) if date_tag else None,
+        "Category": category_tag.get_text(strip=True) if category_tag else None,
+        "Link": f"https://oig.hhs.gov{link_tag['href']}" if link_tag and link_tag.has_attr('href') else None
+    })
+
+# Convert to a DataFrame
+enforcement_actions = pd.DataFrame(actions_data)
+
+# Display DataFrame to
+enforcement_actions.head()
+```
+
+Second Page
+```{python}
+url = 'https://oig.hhs.gov/fraud/enforcement/?page=2'
+response = requests.get(url)
+soup = BeautifulSoup(response.content, 'lxml')
 ```
 
 ```{python}
@@ -108,7 +156,7 @@ enforcement_actions.head()
 # Practice with first link to find the right information
 url_macomb = 'https://oig.hhs.gov/fraud/enforcement/macomb-county-doctor-and-pharmacist-agree-to-pay-700948-to-settle-false-claims-act-allegations/'
 response_macomb = requests.get(url_macomb)
-soup_macomb = BeautifulSoup(response_macomb.content, 'html.parser')
+soup_macomb = BeautifulSoup(response_macomb.content, 'lxml')
 table_macomb = soup_macomb.find('ul', class_='usa-list usa-list--unstyled margin-y-2')
 li_macomb = table_macomb.find_all('li')
 print(li_macomb)
@@ -119,7 +167,7 @@ print(li_macomb)
 def get_agency(link):
     try:
         response = requests.get(link)
-        page_soup = BeautifulSoup(response.content, "html.parser")
+        page_soup = BeautifulSoup(response.content, "lxml")
         second_li = page_soup.find("ul", class_='usa-list usa-list--unstyled margin-y-2').find_all('li')[1]
         # Extract text after 'Agency:'
         agency_text = second_li.get_text(strip=True)
@@ -138,6 +186,48 @@ enforcement_actions['Agency'] = enforcement_actions['Link'].apply(get_agency)
 enforcement_actions.head()
 ```
 
+```{python}
+enforcement_actions['Date'] = pd.to_datetime(enforcement_actions['Date'])
+enforcement_actions.head(
+)
+```
+
+```{python}
+# ChatGPT Question: use beautiful soup to extract a ul html block
+table = soup.find('ul', class_='usa-card-group padding-y-0')
+li = table.find_all('li')
+print(li)
+
+```
+```{python}
+#ChatGPT Question: code a dataset that has each action's header, date, category, and href link
+actions_data = []
+
+# Loop through each relevant <li> element
+for l in li:
+    header_tag = l.find("h2")
+    date_tag = l.find("span")
+    link_tag = l.find("a")
+    category_tag = l.find("ul").find("li") if l.find("ul") else None
+
+    # Skip entries where all fields are None
+
+
+    # Append non-empty rows to the list
+    actions_data.append({
+        "Header": header_tag.get_text(strip=True) if header_tag else None,
+        "Date": date_tag.get_text(strip=True) if date_tag else None,
+        "Category": category_tag.get_text(strip=True) if category_tag else None,
+        "Link": f"https://oig.hhs.gov{link_tag['href']}" if link_tag and link_tag.has_attr('href') else None
+    })
+
+# Convert to a DataFrame
+enforcement_actions = pd.DataFrame(actions_data)
+
+# Display DataFrame to
+enforcement_actions.head()
+```
+
 ## Step 2: Making the scraper dynamic
 
 ### 1. Turning the scraper into a function
@@ -145,29 +235,173 @@ enforcement_actions.head()
 -   
 
     a.  Pseudo-Code (PARTNER 2)
+def date_actions(month, year)
+  if year < 2013
+    print("Dates must be after 2013")
+    return
+  
+  else:
+  years_to_actions = []
+  start_date = (year, month, 1)
+  today = datetime.today()
 
+  while start_date <= today:
+    for page in range(1, 77):
+      url = f'https://oig.hhs.gov/fraud/enforcement/?=page{page}'
+      response = requests.get(url)
+      soup = BeautifulSoup(response.content, 'html.parser')
+    for action in soup.find_all("relevant-html-selector"):
+      # Extract data for each action
+      header = get_action_header(action)
+      date = get_action_date(action)
+      category = get_action_category(action)
+      link = get_action_link(action)
+      agency = get_agency_info(link)
+
+      # Append action data
+      actions_data.append({
+        "Header": header,
+        "Date": date,
+        "Category": category,
+        "Link": link,
+        "Agency": agency
+      })
+
+    # Step 5: Move to the next page or date if necessary, adding a delay
+    start_date = increment_date(start_date)
+    sleep(1)  # Wait 1 second to prevent server overload
+
+    # Step 6: Convert to DataFrame and save to CSV
+df = pd.DataFrame(actions_data)
+filename = f"enforcement_actions_{year}_{month}.csv"
+df.to_csv(filename, index=False)
+
+    print("Scraping complete! Data saved to", filename)
 -   
 
     b.  Create Dynamic Scraper (PARTNER 2)
 
+CORRECT CODE:
 ```{python}
+#| eval : false
+def scrape_enforcement_actions(year, month):
+    if year < 2013:
+        print("Please enter a year from 2013 onward.")
+        return None
+
+    start_date = datetime(year, month, 1)
+    base_url = "https://oig.hhs.gov"
+    all_data = []
+
+    page_num = 1
+    while True:
+        url = base_url + "/fraud/enforcement/?page=" + str(page_num)
+        response = requests.get(url)
+        soup = BeautifulSoup(response.content, 'lxml')
+
+        # Locate enforcement actions on the page
+        actions_list = soup.find('ul', class_='usa-card-group padding-y-0')
+        if not actions_list:
+            break  # Stop if there are no actions on this page
+
+        actions = actions_list.find_all('li', class_="usa-card")  # Get all 'li' elements
+        if not actions:
+            break
+
+        for action in actions:
+            # Find the span element for the date
+            span_element = action.find('span', class_='text-base-dark padding-right-105')
+            if not span_element or not span_element.text:
+                print("No valid span element found for date in action:", action)
+                continue
+
+            try:
+                date_text = span_element.text.strip()
+                action_date = datetime.strptime(date_text, "%B %d, %Y")
+            except Exception as e:
+                print(f"Error parsing date: {e}")
+                continue
+
+            # Collect other action details
+            header = action.find("h2").text.strip()
+            category = action.find("ul").find("li").text.strip() if action.find("ul") else "N/A"
+            link = action.find("a")['href']
+
+            # Ensure the link has the full URL scheme
+            if link.startswith("/"):
+                link = base_url + link
+
+            # Visit each link to get agency name
+            action_response = requests.get(link)
+            action_soup = BeautifulSoup(action_response.content, 'lxml')
+            agency = action_soup.find("ul", class_='usa-list usa-list--unstyled margin-y-2')
+            if agency:
+                agency_text = agency.find_all('li')[1].text.strip() if len(agency.find_all('li')) > 1 else "N/A"
+                if agency_text.startswith('Agency:'):
+                    agency_text = agency_text[len('Agency:'):].strip()
+            else:
+                agency_text = "N/A"
+
+            all_data.append([header, action_date.strftime("%Y-%m-%d"), category, link, agency_text])
+
+        # Stop loop if last action date on page is before the start date
+        if action_date < start_date:
+            break
+
+        time.sleep(1)  # Delay to avoid server blocks
+        page_num += 1
+
+    # Create a DataFrame and save as CSV
+    df = pd.DataFrame(all_data, columns=["Title", "Date", "Category", "Link", "Agency"])
+    df.to_csv(f"enforcement_actions_{year}_{month}.csv", index=False)
+    return df
+
+# Run the scraper from January 2023
+df_jan2023 = scrape_enforcement_actions(2023, 1)
+print(df_jan2023.head())
 
 ```
-
 -   
+
+```{python}
+df_jan2023 = df_jan2023.drop(df_jan2023.index[1534:1540])
+
+```
 
     c.  Test Partner's Code (PARTNER 1)
 
 ```{python}
-
+#| eval : false
+enforcement_actions_2021_01 = scrape_enforcement_actions(2021, 1)
 ```
 
+```{python}
+enforcement_actions_2021_01 = enforcement_actions_2021_01.drop(enforcement_actions_2021_01.index[3022:3040])
+```
 ## Step 3: Plot data based on scraped data
 
 ### 1. Plot the number of enforcement actions over time (PARTNER 2)
 
 ```{python}
+enforcement_actions_2021_01['Date'] = pd.to_datetime(enforcement_actions_2021_01['Date'])
+enforcement_actions_2021_01['month_year'] = enforcement_actions_2021_01['Date'].dt.to_period('M')
+grouped_enforcement_actions = enforcement_actions_2021_01.groupby('month_year').size().reset_index(name='count')
+print(grouped_enforcement_actions['month_year'].dtype)
 
+grouped_enforcement_actions['month_year'] = grouped_enforcement_actions['month_year'].dt.to_timestamp()
+grouped_enforcement_actions['month_year'].head()
+```
+
+```{python}
+grouped_month_chart = alt.Chart(grouped_enforcement_actions, title="Number of Enforcement Actions per Month 2021-2024").mark_line().encode(
+  x=alt.X('month_year:T', title="Date", axis=alt.Axis(format='%m %Y')),
+  y=alt.Y('count:Q', title='Number of Enforcement Actions')
+).properties(
+  width=500
+)
+alt.renderers.enable('default')
+
+grouped_month_chart
 ```
 
 ### 2. Plot the number of enforcement actions categorized: (PARTNER 1)
@@ -175,13 +409,56 @@ enforcement_actions.head()
 -   based on "Criminal and Civil Actions" vs. "State Enforcement Agencies"
 
 ```{python}
+enforcement_actions_2021_01['Category'].unique()
 
+grouped_by_actions = enforcement_actions_2021_01.groupby(['Category', 'month_year']).size().reset_index(name='count')
+grouped_by_actions['action_type'] = grouped_by_actions['Category'].apply(
+    lambda x: 'State Enforcement Agencies' if 'State' in str(x) else 'Criminal and Civil Actions'
+)
+grouped_by_action_type = grouped_by_actions.groupby(['action_type', 'month_year']).sum().reset_index()
+grouped_by_action_type['month_year'] = grouped_by_action_type['month_year'].dt.to_timestamp()
+
+grouped_action_chart = alt.Chart(grouped_by_action_type, title="Number of State Enforcement Agency Actions and Criminal and Civil Actions per Month 2021-2024").mark_line().encode(
+  alt.X('month_year:T', title="Date", axis=alt.Axis(format='%m %Y')),
+  alt.Y('count:Q', title='Number of Enforcement Actions'),
+  alt.Color('action_type:N', title='Action Type')
+).properties(
+  width=500
+)
+alt.renderers.enable('default')
+
+grouped_action_chart
 ```
 
 -   based on five topics
 
 ```{python}
+conditions = [
+    enforcement_actions_2021_01['Title'].str.contains('bank|financial|embezzlement|pricing data|fund|remuneration|theft|dollar|billing|scheme|financial fraud', case=False, na=False),
+    enforcement_actions_2021_01['Title'].str.contains('drug|pill|prescrib|substance|morphine|opiod', case=False, na=False),
+    enforcement_actions_2021_01['Title'].str.contains('bribery|corruption|fabricat|kickback|bribe', case=False, na=False),
+    enforcement_actions_2021_01['Title'].str.contains('exclude|medicaid|dr.|false claim|submitting claim|treat|examination|health care|medicare|medication|healthcare fraud', case=False, na=False)
+]
 
+# Define the corresponding values for the new column
+choices = ['Financial Fraud', 'Drug Enforcement', 'Bribery/Corruption', 'Health Care Fraud']
+
+# Create the new column based on the conditions
+enforcement_actions_2021_01['fraud'] = np.select(conditions, choices, default='Other')
+
+grouped_by_fraud = enforcement_actions_2021_01.groupby(['fraud', 'month_year']).size().reset_index(name='count')
+grouped_by_fraud['month_year'] = grouped_by_fraud['month_year'].dt.to_timestamp()
+
+grouped_fraud_chart = alt.Chart(grouped_by_fraud, title="Number of Enforcement Actions among Five Types of Criminal and Civil Action per Month 2021-2024").mark_line().encode(
+  alt.X('month_year:T', title="Date", axis=alt.Axis(format='%m %Y')),
+  alt.Y('count:Q', title='Number of Enforcement Actions'),
+  alt.Color('fraud:N', title='Type of Fraud')
+).properties(
+  width=500
+)
+alt.renderers.enable('default')
+
+grouped_fraud_chart
 ```
 
 ## Step 4: Create maps of enforcement activity
